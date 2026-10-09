@@ -253,13 +253,17 @@
     return Object.entries(m).sort((a, b) => b[1].total - a[1].total);
   }
 
-  // Extract first user from plan_user field (format: "1.user : name\n2.user : name\n3.")
+  // Extract the first user listed in the plan_user field.
+  // Format: "1.thanawat_m : คุณแม็กซ์ (Resigned)\n2.natchanon : คุณเกม\n3."
+  // Some rows leave line 1 blank ("1.") with the real name on line 2, so scan
+  // every line and take the first one that actually carries a name.
   function extractFirstPlanUser(planUserStr) {
     if (!planUserStr) return null;
-    const firstLine = planUserStr.split("\n")[0];
-    // Format: "1.thanawat_m : คุณแม็กซ์ (Resigned)" or "1. username : name"
-    const match = firstLine.match(/^\d+\.\s*([^:]+?)(?:\s*:.*)?$/);
-    if (match) return match[1].trim();
+    const lines = String(planUserStr).split(/\r?\n/);
+    for (const line of lines) {
+      const m = /^\s*\d+\.\s*([^:]+?)\s*(?::.*)?$/.exec(line);
+      if (m && m[1].trim()) return m[1].trim();
+    }
     return null;
   }
 
