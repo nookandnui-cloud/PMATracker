@@ -4,6 +4,10 @@
 const PMA = (() => {
   const LS_KEY = "mfec-pma-tracker-v1";
 
+  // Only rows whose BU Code is in this list are kept. Everything else is
+  // dropped at import time so every view (Summary Report, Plan) agrees.
+  const ALLOWED_BU_CODES = ["HI05000", "SSL88040"];
+
   // ---------- date helpers ----------
   // Stored dates are "YYYY-MM-DD" strings. Parse to a local-midnight Date so
   // calendar-date comparisons (e.g. overdue checks) behave correctly.
@@ -102,12 +106,27 @@ const PMA = (() => {
   }
 
   function ingest(plans, fileName, sheetName) {
+    // Keep only the BUs we track. Record how many were dropped for the UI.
+    const all = Array.isArray(plans) ? plans : [];
+    const kept = all.filter(p => ALLOWED_BU_CODES.includes(String(p.bu_code || "").trim()));
+
+    // Re-number ids so they stay contiguous and unique after filtering.
+    kept.forEach((p, i) => { p.id = i + 1; });
+
     state = {
       version: 1,
-      source: { fileName, sheetName, ingestedAt: new Date().toISOString(), count: plans.length },
-      plans: JSON.parse(JSON.stringify(plans))
+      source: {
+        fileName, sheetName,
+        ingestedAt: new Date().toISOString(),
+        count: kept.length,
+        totalRows: all.length,
+        droppedRows: all.length - kept.length,
+        buCodes: ALLOWED_BU_CODES.slice()
+      },
+      plans: JSON.parse(JSON.stringify(kept))
     };
     save();
+    return state.source;
   }
 
   function save() {

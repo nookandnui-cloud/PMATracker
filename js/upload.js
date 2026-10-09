@@ -82,7 +82,14 @@
           return;
         }
 
-        PMA.ingest(plans, file.name, sheetName);
+        const src = PMA.ingest(plans, file.name, sheetName);
+
+        // Every row was filtered out by the BU Code allow-list.
+        if (!src.count) {
+          showError(`No rows match the allowed BU Code (${src.buCodes.join(", ")}) — ${plans.length} rows read`);
+          return;
+        }
+
         showApp();
       } catch (err) {
         console.error(err);
@@ -245,8 +252,10 @@
   function showApp() {
     landing.hidden = true;
     app.hidden = false;
+    const src = PMA.state.source;
+    const dropped = src.droppedRows ? ` · ${src.droppedRows} rows filtered out (BU)` : "";
     document.getElementById("dataMeta").textContent =
-      `${PMA.state.source.fileName} · ${PMA.state.plans.length} items`;
+      `${src.fileName} · ${src.plans ? src.plans.length : PMA.state.plans.length} items${dropped}`;
     if (window.onDataReady) window.onDataReady();
   }
 

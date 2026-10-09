@@ -1,11 +1,26 @@
-/* plan.js — PMA Plan list with monthly view and filters */
+/* plan.js — PMA Plan list with monthly view and multi-select filters */
 "use strict";
 
 (function() {
   let sortCol = "plan_date";
   let sortAsc = true;
-  let filter = { customer: "", status: "", search: "", month: "", year: "" };
+  // Status / Month / Year are multi-select (arrays of values)
+  let filter = { customer: "", status: [], month: [], year: [], search: "" };
   let debounceTimer = null;
+
+  const MONTHS = [
+    { v: "01", n: "Jan" }, { v: "02", n: "Feb" }, { v: "03", n: "Mar" },
+    { v: "04", n: "Apr" }, { v: "05", n: "May" }, { v: "06", n: "Jun" },
+    { v: "07", n: "Jul" }, { v: "08", n: "Aug" }, { v: "09", n: "Sep" },
+    { v: "10", n: "Oct" }, { v: "11", n: "Nov" }, { v: "12", n: "Dec" }
+  ];
+
+  const STATUS_OPTIONS = [
+    { v: "finished", n: "Finished" },
+    { v: "planned",  n: "Planned" },
+    { v: "overdue",  n: "Overdue" },
+    { v: "postpone", n: "Postpone" }
+  ];
 
   function daysUntil(dateStr) {
     if (!dateStr) return null;
@@ -27,6 +42,31 @@
     return `<span style="color:#15803d;font-weight:600">${months} months</span>`;
   }
 
+  // ---------- multi-select rendering ----------
+  function msButton(id, label, selected, total) {
+    const active = selected.length > 0 && selected.length < total;
+    const text = selected.length === 0 ? "All"
+      : selected.length === total ? "All"
+      : selected.length === 1 ? label(selected[0])
+      : `${selected.length} selected`;
+    return `<button type="button" class="ms-btn ${active ? "active" : ""}" id="${id}-btn" aria-expanded="false">
+      <span class="ms-label">${PMA.esc(text)}</span><span class="caret">▼</span>
+    </button>`;
+  }
+
+  function msPanel(id, options, selected) {
+    return `<div class="ms-panel" id="${id}-panel" hidden>
+      <div class="ms-actions">
+        <button type="button" data-ms-all="${id}">Select all</button>
+        <button type="button" data-ms-none="${id}">Clear</button>
+      </div>
+      ${options.map(o => `<label class="ms-opt">
+        <input type="checkbox" data-ms="${id}" value="${PMA.esc(o.v)}" ${selected.includes(o.v) ? "checked" : ""}>
+        <span>${PMA.esc(o.n)}</span>
+      </label>`).join("")}
+    </div>`;
+  }
+
   function render() {
     const view = document.getElementById("view");
     const plans = PMA.plans();
@@ -38,13 +78,7 @@
 
     const customers = PMA.unique("customer");
     const years = [...new Set(plans.map(p => p.plan_date ? p.plan_date.slice(0,4) : null).filter(Boolean))].sort();
-
-    const months = [
-      { v: "01", n: "Jan" }, { v: "02", n: "Feb" }, { v: "03", n: "Mar" },
-      { v: "04", n: "Apr" }, { v: "05", n: "May" }, { v: "06", n: "Jun" },
-      { v: "07", n: "Jul" }, { v: "08", n: "Aug" }, { v: "09", n: "Sep" },
-      { v: "10", n: "Oct" }, { v: "11", n: "Nov" }, { v: "12", n: "Dec" }
-    ];
+    const yearOptions = years.map(y => ({ v: y, n: y }));
 
     view.innerHTML = `
       <div class="view-head">
@@ -68,27 +102,24 @@
           </div>
           <div>
             <label>Status</label>
-            <select id="filter-status">
-              <option value="">All</option>
-              <option value="finished" ${filter.status==="finished"?"selected":""}>Finished</option>
-              <option value="planned" ${filter.status==="planned"?"selected":""}>Planned</option>
-              <option value="overdue" ${filter.status==="overdue"?"selected":""}>Overdue</option>
-              <option value="postpone" ${filter.status==="postpone"?"selected":""}>Postpone</option>
-            </select>
+            <div class="ms" id="ms-status">
+              ${msButton("ms-status", v => (STATUS_OPTIONS.find(o => o.v === v) || {}).n || v, filter.status, STATUS_OPTIONS.length)}
+              ${msPanel("ms-status", STATUS_OPTIONS, filter.status)}
+            </div>
           </div>
           <div>
             <label>Month</label>
-            <select id="filter-month">
-              <option value="">All</option>
-              ${months.map(m => `<option value="${m.v}" ${filter.month===m.v?"selected":""}>${m.n}</option>`).join("")}
-            </select>
+            <div class="ms" id="ms-month">
+              ${msButton("ms-month", v => (MONTHS.find(m => m.v === v) || {}).n || v, filter.month, MONTHS.length)}
+              ${msPanel("ms-month", MONTHS, filter.month)}
+            </div>
           </div>
           <div>
             <label>Year</label>
-            <select id="filter-year">
-              <option value="">All</option>
-              ${years.map(y => `<option value="${y}" ${filter.year===y?"selected":""}>${y}</option>`).join("")}
-            </select>
+            <div class="ms" id="ms-year">
+              ${msButton("ms-year", v => v, filter.year, yearOptions.length)}
+              ${msPanel("ms-year", yearOptions, filter.year)}
+            </div>
           </div>
           <div style="margin-left:auto">
             <label>&nbsp;</label>
@@ -120,7 +151,100 @@
       </div>
     `;
 
-    // Attach listeners
+    wireMultiSelects();
+    wireListeners();
+    renderTable();
+  }
+
+  // ---------- multi-select behaviour ----------
+  function wireMultiSelects() {
+    // open / close panels
+    ["ms-status", "ms-month", "ms-year"].forEach(id => {
+      const btn = document.getElementById(id + "-btn");
+      const panel = document.getElementById(id + "-panel");
+      if (!btn || !panel) return;
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const open = !panel.hidden;
+        closeAllPanels();
+        panel.hidden = open;
+        btn.setAttribute("aria-expanded", String(!open));
+      });
+    });
+
+    // checkbox changes
+    document.querySelectorAll("input[data-ms]").forEach(cb => {
+      cb.addEventListener("change", () => {
+        syncFromDom();
+        renderTable();
+        refreshButtons();
+      });
+    });
+
+    // select all / clear
+    document.querySelectorAll("[data-ms-all]").forEach(b => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = b.dataset.msAll;
+        document.querySelectorAll(`input[data-ms="${id}"]`).forEach(cb => { cb.checked = true; });
+        syncFromDom(); renderTable(); refreshButtons();
+      });
+    });
+    document.querySelectorAll("[data-ms-none]").forEach(b => {
+      b.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const id = b.dataset.msNone;
+        document.querySelectorAll(`input[data-ms="${id}"]`).forEach(cb => { cb.checked = false; });
+        syncFromDom(); renderTable(); refreshButtons();
+      });
+    });
+
+    // click outside closes panels
+    document.addEventListener("click", closeAllPanels);
+    document.getElementById("ms-status")?.addEventListener("click", e => e.stopPropagation());
+    document.getElementById("ms-month")?.addEventListener("click", e => e.stopPropagation());
+    document.getElementById("ms-year")?.addEventListener("click", e => e.stopPropagation());
+  }
+
+  function closeAllPanels() {
+    document.querySelectorAll(".ms-panel").forEach(p => { p.hidden = true; });
+    document.querySelectorAll(".ms-btn").forEach(b => b.setAttribute("aria-expanded", "false"));
+  }
+
+  // read checkbox state back into `filter`
+  function syncFromDom() {
+    ["status", "month", "year"].forEach(k => {
+      const boxes = document.querySelectorAll(`input[data-ms="ms-${k}"]`);
+      if (!boxes.length) return;
+      filter[k] = Array.from(boxes).filter(cb => cb.checked).map(cb => cb.value);
+    });
+  }
+
+  // update the trigger labels after a change (without a full re-render)
+  function refreshButtons() {
+    const sets = [
+      { id: "ms-status", opts: STATUS_OPTIONS },
+      { id: "ms-month",  opts: MONTHS },
+      { id: "ms-year",   opts: [...new Set(PMA.plans().map(p => p.plan_date ? p.plan_date.slice(0,4) : null).filter(Boolean))].sort().map(y => ({ v: y, n: y })) }
+    ];
+    sets.forEach(({ id, opts }) => {
+      const key = id.replace("ms-", "");
+      const btn = document.getElementById(id + "-btn");
+      if (!btn) return;
+      const sel = filter[key];
+      const total = opts.length;
+      const active = sel.length > 0 && sel.length < total;
+      const text = sel.length === 0 || sel.length === total
+        ? "All"
+        : sel.length === 1
+          ? ((opts.find(o => o.v === sel[0]) || {}).n || sel[0])
+          : `${sel.length} selected`;
+      btn.querySelector(".ms-label").textContent = text;
+      btn.classList.toggle("active", active);
+    });
+  }
+
+  function wireListeners() {
     document.getElementById("search-input").addEventListener("input", (e) => {
       clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => {
@@ -131,15 +255,6 @@
     document.getElementById("filter-customer").addEventListener("change", (e) => {
       filter.customer = e.target.value; renderTable();
     });
-    document.getElementById("filter-status").addEventListener("change", (e) => {
-      filter.status = e.target.value; renderTable();
-    });
-    document.getElementById("filter-month").addEventListener("change", (e) => {
-      filter.month = e.target.value; renderTable();
-    });
-    document.getElementById("filter-year").addEventListener("change", (e) => {
-      filter.year = e.target.value; renderTable();
-    });
 
     document.querySelectorAll("#planTable thead th.sortable").forEach(th => {
       th.addEventListener("click", () => {
@@ -149,22 +264,24 @@
         renderTable();
       });
     });
-
-    renderTable();
   }
 
   function applyFilters() {
     return PMA.plans().filter(p => {
       if (filter.customer && p.customer !== filter.customer) return false;
-      if (filter.status === "finished" && PMA.statusOf(p) !== "Finished") return false;
-      if (filter.status === "planned" && PMA.statusOf(p) !== "Planned") return false;
-      if (filter.status === "overdue" && PMA.statusOf(p) !== "Overdue") return false;
-      if (filter.status === "postpone" && PMA.statusOf(p) !== "Postpone") return false;
-      if (filter.month) {
-        if (!p.plan_date || !p.plan_date.includes("-" + filter.month + "-")) return false;
+
+      if (filter.status.length) {
+        const s = PMA.statusOf(p).toLowerCase();
+        if (!filter.status.includes(s)) return false;
       }
-      if (filter.year) {
-        if (!p.plan_date || !p.plan_date.startsWith(filter.year)) return false;
+      if (filter.month.length) {
+        if (!p.plan_date) return false;
+        const mm = p.plan_date.slice(5, 7);
+        if (!filter.month.includes(mm)) return false;
+      }
+      if (filter.year.length) {
+        if (!p.plan_date) return false;
+        if (!filter.year.includes(p.plan_date.slice(0, 4))) return false;
       }
       if (filter.search) {
         const hay = `${p.customer} ${p.project_code} ${p.description} ${p.pm} ${p.sale} ${p.product}`.toLowerCase();
@@ -221,11 +338,10 @@
     tbody.innerHTML = list.map(p => {
       const status = PMA.statusOf(p);
       const badgeClass = "st-" + status.replace(" ", "");
-      
-      // Countdown logic: if Finished, show Plan - Actual; else show Plan - Today
+
+      // Countdown: if Finished, show Actual - Plan; else Plan - Today
       let days;
       if (status === "Finished" && p.actual_date && p.plan_date) {
-        // Calculate plan - actual date difference
         const plan = new Date(p.plan_date);
         const actual = new Date(p.actual_date);
         plan.setHours(0, 0, 0, 0);
@@ -234,10 +350,7 @@
       } else {
         days = daysUntil(p.plan_date);
       }
-      
-      // Format plan_user to show nickname if possible
-      const planUserDisplay = p.plan_user || "—";
-      
+
       return `<tr onclick="showDrawer(${p.id})">
         <td><span class="customer-chip">${PMA.esc(p.customer || "—")}</span></td>
         <td><span class="code">${PMA.esc(p.project_code || "—")}</span></td>
@@ -249,14 +362,14 @@
         <td>
           <span class="badge ${badgeClass}">${PMA.statusLabel(status)}</span>
         </td>
-        <td>${PMA.esc(planUserDisplay)}</td>
+        <td>${PMA.esc(p.plan_user || "—")}</td>
         <td>${PMA.esc(p.product || "—")}</td>
       </tr>`;
     }).join("");
   }
 
   window.resetPlanFilters = function() {
-    filter = { customer: "", status: "", search: "", month: "", year: "" };
+    filter = { customer: "", status: [], month: [], year: [], search: "" };
     render();
   };
 

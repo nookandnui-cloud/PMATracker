@@ -270,6 +270,43 @@ input[type="search"] { width: 240px; }
 .seg button + button { border-left: 1px solid var(--border-2); }
 .seg button.on { background: var(--accent-soft); color: var(--accent); }
 
+/* ============ multi-select ============ */
+.ms { position: relative; display: inline-block; }
+.ms-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: inherit; font-size: 12.5px; color: var(--ink);
+  border: 1px solid var(--border-2); border-radius: 7px;
+  background: #fff; padding: 6px 9px; cursor: pointer;
+  min-width: 108px; text-align: left;
+}
+.ms-btn:hover { border-color: var(--border-2); background: var(--surface-2); }
+.ms-btn .ms-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-btn .caret { color: var(--muted); font-size: 9px; }
+.ms-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.ms-panel {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 60;
+  min-width: 168px; max-height: 264px; overflow-y: auto;
+  background: #fff; border: 1px solid var(--border-2);
+  border-radius: 8px; box-shadow: var(--shadow-lg); padding: 4px;
+}
+.ms-panel[hidden] { display: none; }
+.ms-actions {
+  display: flex; gap: 6px; padding: 4px 6px 6px;
+  border-bottom: 1px solid var(--border); margin-bottom: 4px;
+}
+.ms-actions button {
+  border: 0; background: none; cursor: pointer; padding: 2px 4px;
+  font-family: inherit; font-size: 11px; font-weight: 600; color: var(--accent);
+}
+.ms-actions button:hover { text-decoration: underline; }
+.ms-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 12.5px; font-weight: 500; color: var(--ink);
+}
+.ms-opt:hover { background: var(--surface-2); }
+.ms-opt input { margin: 0; accent-color: var(--accent); }
+
 /* ============ drawer ============ */
 .drawer-backdrop {
   position: fixed; inset: 0; background: rgba(15,23,42,.35);
