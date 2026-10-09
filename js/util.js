@@ -5,6 +5,8 @@ const PMA = (() => {
   const LS_KEY = "mfec-pma-tracker-v1";
 
   // ---------- date helpers ----------
+  // Stored dates are "YYYY-MM-DD" strings. Parse to a local-midnight Date so
+  // calendar-date comparisons (e.g. overdue checks) behave correctly.
   function parseExcelDate(v) {
     if (!v) return null;
     if (typeof v === "string") {
@@ -13,9 +15,9 @@ const PMA = (() => {
       return null;
     }
     if (typeof v === "number" && v > 40000 && v < 60000) {
-      const base = new Date(1899, 11, 30);
-      const d = new Date(base.getTime() + v * 86400000);
-      return d;
+      // Excel serial -> UTC calendar date -> local midnight (no TZ shift)
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86400000);
+      return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     }
     if (v instanceof Date) return v;
     return null;
@@ -25,14 +27,14 @@ const PMA = (() => {
     if (!d) return "—";
     const dt = parseExcelDate(d);
     if (!dt) return "—";
-    return dt.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+    return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
   }
 
   function fmtShort(d) {
     if (!d) return "—";
     const dt = parseExcelDate(d);
     if (!dt) return "—";
-    return dt.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+    return dt.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   }
 
   // ---------- status ----------

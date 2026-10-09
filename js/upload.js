@@ -210,19 +210,35 @@
     return plans;
   }
 
+  // Convert an Excel date serial (1900 date system) to a "YYYY-MM-DD" string.
+  // Uses pure UTC arithmetic so the calendar date never shifts with the local
+  // timezone. (toISOString() on a locally-built Date would roll the date back
+  // a day in any positive-offset zone, e.g. UTC+7 Bangkok.)
+  function excelSerialToYMD(serial) {
+    const days = Math.floor(serial);
+    const d = new Date(Date.UTC(1899, 11, 30) + days * 86400000);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
   function parseExcelDateValue(v) {
     if (!v && v !== 0) return null;
     if (typeof v === "number" && v > 40000 && v < 60000) {
-      const base = new Date(1899, 11, 30);
-      const d = new Date(base.getTime() + v * 86400000);
-      return d.toISOString().slice(0, 10);
+      return excelSerialToYMD(v);
+    }
+    if (v instanceof Date) {
+      const y = v.getFullYear();
+      const m = String(v.getMonth() + 1).padStart(2, "0");
+      const day = String(v.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
     }
     if (typeof v === "string") {
       const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v);
       if (m) return v.slice(0, 10);
       return v || null;
     }
-    if (v instanceof Date) return v.toISOString().slice(0, 10);
     return null;
   }
 
