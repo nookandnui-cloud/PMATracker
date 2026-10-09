@@ -10,7 +10,6 @@ Preventive Maintenance Plan tracking web application — import Excel PMA Plan a
 ├── styles.css              # All styles
 ├── js/
 │   ├── app.js              # App controller
-│   ├── dashboard.js        # Dashboard view
 │   ├── plan.js             # Plan view (list + filters)
 │   ├── report.js           # Summary Report view
 │   ├── upload.js           # Excel file import handler
@@ -57,7 +56,6 @@ oc create configmap pma-tracker-root \
 # JS files
 oc create configmap pma-tracker-js \
   --from-file=app.js=./js/app.js \
-  --from-file=dashboard.js=./js/dashboard.js \
   --from-file=plan.js=./js/plan.js \
   --from-file=report.js=./js/report.js \
   --from-file=upload.js=./js/upload.js \
@@ -110,7 +108,6 @@ oc create configmap pma-tracker-root \
 # Update JS files
 oc create configmap pma-tracker-js \
   --from-file=app.js=./js/app.js \
-  --from-file=dashboard.js=./js/dashboard.js \
   --from-file=plan.js=./js/plan.js \
   --from-file=report.js=./js/report.js \
   --from-file=upload.js=./js/upload.js \

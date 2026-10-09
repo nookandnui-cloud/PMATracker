@@ -196,8 +196,8 @@
     return false;
   };
 
-  // Global data ready callback
+  // Global data ready callback — show the default view after upload
   window.onDataReady = function() {
-    switchView("dashboard");
+    switchView("report");
   };
 })();
